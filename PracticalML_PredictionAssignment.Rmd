@@ -1,0 +1,169 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Practical Machine Learning - Prediction Assignment
+#### Author: Karthik Muthuveeramani
+## Executive Summary
+As part of this assignment, we use the Human Activity Recognition(HAR) dataset, from http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har, that describes the exercise activities of 6 participants from accelerometers on the belt, forearm, arm and dumbbell. The classe variable is the outcome variable that shows how well they did the exercise by classifying them as A, B, C, D and E
+
+Class A - exactly according to the specification
+
+Class B - throwing the elbows to the front
+
+Class C - lifting the dumbbell only halfway
+
+Class D - lowering the dumbbell only halfway
+
+Class E - throwing the hips to the front
+
+We have been given the training and testing data sets. We used the training dataset to train the model and use the testing set to predict the outcomes.
+As part of this activity, we have read the training and testing data into R, then preprocessed the data and removed the variable that are not required or are incomplete, then we have split the training data into train and validation set to perform the validation and get the accuracy and out of sample error. Finally, we have used the train data and built 6 models - Decision Trees, Random Forests, Gradient Boosting, Support Vector Machines, Naive Bayes and LDA. We then decide on the best model based on accuracy and use it to predict the classe for the test data set.
+
+## Reading required Data and libraries 
+```{r read_data, echo=TRUE, message=FALSE, warning=FALSE}
+library(caret)
+library(rattle)
+library(naivebayes)
+set.seed(123)
+train <- read.csv("./pml-training.csv")
+test <- read.csv("./pml-testing.csv")
+```
+
+```{r check_data, echo=TRUE, message=FALSE, warning=FALSE}
+dim(train)
+dim(test)
+```
+
+## Cleaning up the training data
+We are removing those variables which have greater than 90% NA values in them.
+Also, we remove the 1st 7 columns which are more of user information, timestamp details.
+We then remove the variables with near zero variance.
+```{r clean_data, echo=TRUE, message=FALSE, warning=FALSE}
+train_na_removed <- train
+train_na_removed <- train[, which(colMeans(!is.na(train)) > 0.9)]
+# Removing the 1st 7 columns which are more of user information, timestamp
+train_na_removed <- train_na_removed[, -c(1:7)]
+# Removing the variables with near zero variance.
+nsv <- nearZeroVar(train_na_removed)
+train_na_removed <- train_na_removed[,-nsv]
+dim(train_na_removed)
+```
+
+We now have `r dim(train_na_removed)[2]` variables in the train set.
+
+## Split into train and validation
+```{r split_data, echo=TRUE, message=FALSE, warning=FALSE}
+inTrain <- createDataPartition(y= train_na_removed$classe,
+                               p=0.7,list=FALSE)
+train_data <- train_na_removed[inTrain,]
+validation_data <- train_na_removed[-inTrain,]
+dim(train_data)
+dim(validation_data)
+```
+
+## Fitting the Models
+We apply the cross validation method to the trainControl parameters of all the models except the LDA.
+The resampling method used is cv and the number of iterations is 3
+
+# Decision Trees
+```{r dtree, echo=TRUE, message=FALSE, warning=FALSE}
+modFit_dtree <- train(classe ~ ., method = "rpart", 
+                      data = train_data,trControl = trainControl(method="cv",
+                                                                 number=3))
+fancyRpartPlot(modFit_dtree$finalModel)
+#Predicting using decision trees
+pred_dtree <- predict(modFit_dtree,validation_data)
+conf_mat_dtree <- confusionMatrix(pred_dtree,factor(validation_data$classe))
+conf_mat_dtree
+```
+The accuracy of the decision tree model is `r conf_mat_dtree$overall[1]`
+
+The out of sample error of the decision tree model is `r 1-conf_mat_dtree$overall[1]`
+
+# Random Forest
+```{r rf, echo=TRUE, message=FALSE, warning=FALSE}
+modFit_rf <- train(classe ~ ., method = "rf", data = train_data,trControl =
+                       trainControl(method="cv", number=3))
+#Predicting using random forests
+pred_rf <- predict(modFit_rf,validation_data)
+conf_mat_rf <- confusionMatrix(pred_rf,factor(validation_data$classe))
+conf_mat_rf
+```
+The accuracy of the random forest model is `r conf_mat_rf$overall[1]`
+
+The out of sample error of the random forest model is `r 1-conf_mat_rf$overall[1]`
+
+# Gradient Boosting
+```{r gbm, echo=TRUE, message=FALSE, warning=FALSE}
+modFit_gbm <- train(classe ~ ., method = "gbm", data = train_data,trControl =
+                        trainControl(method="cv", number=3), verbose = FALSE)
+#Predicting using Gradient Boosting
+pred_gbm <- predict(modFit_gbm,validation_data)
+conf_mat_gbm <- confusionMatrix(pred_gbm,factor(validation_data$classe))
+conf_mat_gbm
+```
+The accuracy of the Gradient Boosting model is `r conf_mat_gbm$overall[1]`
+
+The out of sample error of the Gradient Boosting model is `r 1-conf_mat_gbm$overall[1]`
+
+# Support Vector Machine
+```{r svm, echo=TRUE, message=FALSE, warning=FALSE}
+modFit_svm <- train(classe ~ ., method = "svmLinear", data = train_data,trControl =
+                        trainControl(method="cv", number=3))
+#Predicting using svm
+pred_svm <- predict(modFit_svm,validation_data)
+conf_mat_svm <- confusionMatrix(pred_svm,factor(validation_data$classe))
+conf_mat_svm
+```
+The accuracy of the Support Vector Machine model is `r conf_mat_svm$overall[1]`
+
+The out of sample error of the Support Vector Machine model is `r 1-conf_mat_svm$overall[1]`
+
+# Naive Bayes
+```{r nb, echo=TRUE, message=FALSE, warning=FALSE}
+modFit_nb <- train(classe ~ ., method = "naive_bayes", data = train_data,trControl =
+                       trainControl(method="cv", number=3))
+#Predicting using naive bayes
+pred_nb <- predict(modFit_nb,validation_data)
+conf_mat_nb <- confusionMatrix(pred_nb,factor(validation_data$classe))
+conf_mat_nb
+```
+The accuracy of the Naive Bayes model is `r conf_mat_nb$overall[1]`
+
+The out of sample error of the Naive Bayes model is `r 1-conf_mat_nb$overall[1]`
+
+# LDA
+```{r lda, echo=TRUE, message=FALSE, warning=FALSE}
+modlda <- train(classe ~ ., data = train_data, method = "lda")
+#predicting using lda
+pred_lda <- predict(modlda,validation_data)
+conf_mat_lda <- confusionMatrix(pred_lda,factor(validation_data$classe))
+conf_mat_lda
+```
+The accuracy of the LDA model is `r conf_mat_lda$overall[1]`
+
+The out of sample error of the LDA model is `r 1-conf_mat_lda$overall[1]`
+
+## Plot the model outcomes
+```{r plot_outcomes, echo=TRUE, message=FALSE, warning=FALSE}
+par(mfrow=c(2,3))
+plot(conf_mat_rf$table,main="Random Forest")
+plot(conf_mat_gbm$table,main="Gradient Boosting")
+plot(conf_mat_svm$table,main="SVM")
+plot(conf_mat_nb$table,main="Naive Bayes")
+plot(conf_mat_lda$table,main="LDA")
+plot(conf_mat_dtree$table,main="Decision Trees")
+```
+
+We can clearly see that the Random Forest model is the best one with an accuracy of `r conf_mat_rf$overall[1]`
+
+## Prediction and Results
+We use the Random Forest model to predict the classe for the 20 testing cases. The output is shown below:
+```{r pred_results, echo=TRUE, message=FALSE, warning=FALSE}
+predict_test <- predict(modFit_rf,newdata = test)
+predict_test
+```
+
+
